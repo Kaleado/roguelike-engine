@@ -45,13 +45,113 @@
     <ClInclude Include="src\gmInterface.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\gmEquipment.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gmBodyPart.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\dataThings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gmItem.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gmToss.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gmLocale.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gmWorldMap.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gmGrab.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gmMaterial.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\fov.c">
       <Filter>Header Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Font Include="res\ARIALNBI.TTF">
+      <Filter>Resource Files</Filter>
+    </Font>
+    <Font Include="res\ARIALNI.TTF">
+      <Filter>Resource Files</Filter>
+    </Font>
+    <Font Include="res\ariblk.ttf">
+      <Filter>Resource Files</Filter>
+    </Font>
+    <Font Include="res\arial.ttf">
+      <Filter>Resource Files</Filter>
+    </Font>
+    <Font Include="res\arialbd.ttf">
+      <Filter>Resource Files</Filter>
+    </Font>
+    <Font Include="res\arialbi.ttf">
+      <Filter>Resource Files</Filter>
+    </Font>
+    <Font Include="res\ariali.ttf">
+      <Filter>Resource Files</Filter>
+    </Font>
+    <Font Include="res\ARIALN.TTF">
+      <Filter>Resource Files</Filter>
+    </Font>
+    <Font Include="res\ARIALNB.TTF">
+      <Filter>Resource Files</Filter>
+    </Font>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="res\background.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\background-alternate.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\background-black.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\floor.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\list-cursor.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\mask.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\message-log-background.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\player.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\side-panel-background.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\test.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\test2.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\test3.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\test4.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\wall.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

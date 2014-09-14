@@ -27,6 +27,8 @@ bool opaque(void* map, int x, int y)
 void doFov(int x, int y, int radius, void* map)
 {
 	fov_circle(&fovSettings, map, NULL, x, y, radius);
+	((gmMap*)map)->fovMap[y][x] = true;
+	((gmMap*)map)->rememberMap[y][x] = true;
 	return;
 }
 

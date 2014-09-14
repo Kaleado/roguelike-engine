@@ -8,12 +8,22 @@
 #include <random>
 #include <vector>
 
+#define QUITTING 0
+#define PLAYING 1
+#define SELECTING_FROM_LIST 2
+
+int gameState;
+
 //Camera X and Y values.
 int camX=0, camY=0;
 
 //Screen dimension constants
 const int SCREEN_WIDTH = 630;
 const int SCREEN_HEIGHT = 480;
+const int WINDOW_WIDTH = SCREEN_WIDTH + 240;
+const int WINDOW_HEIGHT = SCREEN_HEIGHT + 240;
+
+SDL_Window* gWindow = NULL;
 
 //The surface contained by the window
 SDL_Surface* screen = NULL;

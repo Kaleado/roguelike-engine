@@ -69,20 +69,56 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="src\dataThings.h" />
     <ClInclude Include="src\fov.h" />
     <ClInclude Include="src\gmAi.h" />
+    <ClInclude Include="src\gmBodyPart.h" />
     <ClInclude Include="src\gmContainer.h" />
     <ClInclude Include="src\gmDice.h" />
+    <ClInclude Include="src\gmEquipment.h" />
     <ClInclude Include="src\gmFov.h" />
+    <ClInclude Include="src\gmGrab.h" />
     <ClInclude Include="src\gmInterface.h" />
+    <ClInclude Include="src\gmItem.h" />
+    <ClInclude Include="src\gmLocale.h" />
     <ClInclude Include="src\gmMap.h" />
+    <ClInclude Include="src\gmMaterial.h" />
     <ClInclude Include="src\gmRender.h" />
     <ClInclude Include="src\gmThing.h" />
     <ClInclude Include="src\gmTile.h" />
+    <ClInclude Include="src\gmToss.h" />
+    <ClInclude Include="src\gmWorldMap.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\fov.c" />
     <ClCompile Include="src\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Font Include="res\arial.ttf" />
+    <Font Include="res\arialbd.ttf" />
+    <Font Include="res\arialbi.ttf" />
+    <Font Include="res\ariali.ttf" />
+    <Font Include="res\ARIALN.TTF" />
+    <Font Include="res\ARIALNB.TTF" />
+    <Font Include="res\ARIALNBI.TTF" />
+    <Font Include="res\ARIALNI.TTF" />
+    <Font Include="res\ariblk.ttf" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="res\background-alternate.png" />
+    <Image Include="res\background-black.png" />
+    <Image Include="res\background.png" />
+    <Image Include="res\floor.png" />
+    <Image Include="res\list-cursor.png" />
+    <Image Include="res\mask.png" />
+    <Image Include="res\message-log-background.png" />
+    <Image Include="res\player.png" />
+    <Image Include="res\side-panel-background.png" />
+    <Image Include="res\test.png" />
+    <Image Include="res\test2.png" />
+    <Image Include="res\test3.png" />
+    <Image Include="res\test4.png" />
+    <Image Include="res\wall.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

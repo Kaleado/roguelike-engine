@@ -3,6 +3,8 @@
 
 #include "gmRender.h"
 
+class gmThing;
+
 class gmTile
 {
 public:
@@ -11,7 +13,7 @@ public:
 	std::string imgPath;
 	bool passable;
 	bool opaque;
-
+	void(*onStep)(gmThing* target);//Function to run when a creature attempts to step on to the tile.
 	void show(int x, int y)
 	{
 		apply((x - camX) * 30, (y - camY) * 30, img, screen);
@@ -39,7 +41,7 @@ public:
 		bool opaque)
 	{
 		mask = IMG_Load("res/mask.png");
-		SDL_SetSurfaceAlphaMod(mask, 125);
+		SDL_SetSurfaceAlphaMod(mask, 200);
 		this->imgPath = imgPath;
 		this->passable = passable;
 		this->opaque = opaque;

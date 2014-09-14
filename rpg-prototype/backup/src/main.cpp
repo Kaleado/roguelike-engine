@@ -1,5 +1,6 @@
 #include <SDL.h>
 #include <SDL_image.h>
+#include <SDL_ttf.h>
 #include <stdio.h>
 #include <string>
 #include <algorithm>
@@ -11,31 +12,74 @@
 #include "gmAi.h"
 #include "gmMap.h"
 #include "gmFov.h"
+#include "gmInterface.h"
+#include "gmToss.h"
+#include "gmLocale.h"
+#include "gmWorldMap.h"
 
 #define DEBUG true
 #define FOV_RADIUS 3
 
-SDL_Window* gWindow = NULL;
 SDL_Surface* background = NULL;
-gmTile ground("res/test2.png", true, false);
-gmTile wall("res/test3.png", false, true);
+gmTile ground("res/floor.png", true, false);
+gmTile wall("res/wall.png", false, true);
+gmTile door("res/door.png", true, true);
+gmTile downStairs("res/stairs-down.png", true, false);
+gmTile upStairs("res/stairs-up.png", true, false);
 gmMap* currentMap;
 
 int distance(int dX0, int dY0, int dX1, int dY1)
 {
-	return int(sqrt((dX1 - dX0)*(dX1 - dX0) + (dY1 - dY0)*(dY1 - dY0)));
+	return int(sqrt(abs((dX1 - dX0)*(dX1 - dX0) + (dY1 - dY0)*(dY1 - dY0))));
 }
 
-gmThing* getThingByLocation(int x, int y, gmMap* map = currentMap)
+gmThing* getThingByLocation(int x, int y, gmMap* map = currentMap, gmThing* ignore = NULL)
 {
 	for (int i = 0; i < map->things.size(); i++)
 	{
-		if (map->things[i].x == x && map->things[i].y == y)
+		if (map->things[i]->x == x && map->things[i]->y == y)
 		{
-			return &map->things[i];
+			if (ignore != NULL)
+			{
+				if (map->things[i] != ignore) { return map->things[i]; }
+			}
+			else
+			{
+				return map->things[i];
+			}
 		}
 	}
 	return NULL;
+}
+
+std::vector <gmThing*> getThingListByLocation(int x, int y, gmMap* map = currentMap, gmThing* ignore = NULL)
+{
+	std::vector <gmThing*> l;
+	for (int i = 0; i < map->things.size(); i++)
+	{
+		if (map->things[i]->x == x && map->things[i]->y == y)
+		{
+			if (ignore != NULL)
+			{
+				if (map->things[i] != ignore) { l.push_back(map->things[i]); }
+			}
+			else
+			{
+				l.push_back(map->things[i]);
+			}
+		}
+	}
+	return l;
+}
+
+std::vector <std::string> getNames(std::vector <gmThing*> a)
+{
+	std::vector <std::string> b;
+	for (int i = 0; i < a.size(); i++)
+	{
+		b.insert(b.end(), a[i]->name);
+	}
+	return b;
 }
 
 bool getCanMove(int x, int y, gmMap* map = currentMap)
@@ -50,98 +94,63 @@ void moveMaps(gmThing* target, gmMap* source, gmMap* destination, int x, int y)
 	//Remember: the player is always the first thing in the thinglist.
 	target->x = x;
 	target->y = y;
-	target == player ? destination->things.insert(destination->things.begin(), *target) : destination->things.insert(destination->things.end(), *target);
+	target == player ? destination->things.insert(destination->things.begin(), target) : destination->things.insert(destination->things.end(), target);
 	int index = 0;
-	for (int i = 0; i < source->things.size(); i++){ if (&source->things[i] == target){ index = i; break; } }//Find the target thing's index so that we can...
+	for (int i = 0; i < source->things.size(); i++){ if (source->things[i] == target){ index = i; break; } }//Find the target thing's index so that we can...
 	source->things.erase(source->things.begin() + index); //...erase it from the source thinglist.
 	if (target == player)
 	{
 		currentMap = destination;//If the target is the player, set the currentMap to the destination.
-		player = &currentMap->things[0];//And reset the player pointer, or things get messy.
+		player = currentMap->things[0];//And reset the player pointer, or things get messy.
 	}
 	return;
 }
 
-//TakeTurns
-void takeTurn_Test(gmThing* owner)//Flashes red and yellow. Test.
+std::vector <std::string> getBodyPartNames(gmThing* target)
 {
-	if (owner->imgPath == "res/test4.png")
+	std::vector <std::string> names;
+	for (int i = 0; i < target->bodyParts.size(); i++)
 	{
-		owner->imgPath = "res/test3.png";
-		owner->load();
+		if (target->bodyParts[i]->equippedThing)
+		{
+			names.push_back("On " + target->bodyParts[i]->name + ": " + target->bodyParts[i]->equippedThing->name);
+		}
+		else
+		{
+			names.push_back("Empty " + target->bodyParts[i]->name);
+		}
 	}
-	else
+	return names;
+}
+
+void equipThing(gmThing* owner, gmThing* equipping, gmBodyPart* targetPart)
+{
+	int index = -1;
+	//Find the item in the owner's bag, and save its index.
+	if (equipping != NULL){for (int i = 0; i < owner->inventory.size(); i++){if (owner->inventory[i] == equipping){index = i;}}}
+	if (targetPart->equippedThing)
 	{
-		owner->imgPath = "res/test4.png";
-		owner->load();
+		owner->inventory.push_back(targetPart->equippedThing);
+		targetPart->equippedThing = NULL;
 	}
+	targetPart->equippedThing = equipping;
+	if (equipping != NULL){owner->inventory.erase(owner->inventory.begin() + index);}
 	return;
 }
 
-void takeTurn_Follow(gmThing* owner)//Follows the target.
+void dropThing (gmThing* owner, gmThing** target)
 {
-	int dx, dy;
-	dx = owner->x - owner->target->x < 0 ? 1 : -1;
-	dx = owner->x - owner->target->x == 0 ? 0 : dx;
-
-	dy = owner->y - owner->target->y < 0 ? 1 : -1;
-	dy = owner->y - owner->target->y == 0 ? 0 : dy;
-	if (getThingByLocation(owner->x + dx, owner->y + dy) != NULL && getThingByLocation(owner->x + dx, owner->y + dy)->isPassable == false)
+	if (owner->inventory.size() > 0)
 	{
-		owner->attack(owner, getThingByLocation(owner->x + dx, owner->y + dy));
-	}
-	else if (owner->x + dx >= 0 && owner->y + dy >= 0 && currentMap->map[owner->y + dy][owner->x + dx]->passable && getThingByLocation(owner->x + dx, owner->y + dy) == NULL)
-	{
-		owner->step(dx, dy);
-	}
-	return;
-}
-
-void takeTurn_Random(gmThing* owner)//Walk around randomly.
-{
-	int dx = rand() % 3 - 1;
-	int dy = rand() % 3 - 1;
-	if (owner->x + dx >= 0 && owner->y + dy >= 0 //Owner is within the map dimensions.
-		&& owner->x + dx < currentMap->map[0].size() && owner->y + dy < currentMap->map.size()
-		&& currentMap->map[owner->y + dy][owner->x + dx]->passable //The tile is passable.
-		&& getThingByLocation(owner->x + dx, owner->y + dy) == NULL) //And there is nothing there.
-	{
-		owner->step(dx, dy);
-	}
-	return;
-}
-
-//GetTargets
-void getTarget_Player(gmThing* owner)//Target the player.
-{
-	owner->target = player;
-	return;
-}
-
-//Attacks
-void attack_Normal(gmThing* owner, gmThing* target)//Default attack.
-{
-	target->curHp -= roll(1, 'd', 6);
-	return;
-}
-
-//Deaths
-void death_Normal(gmThing* owner)//Default death.
-{
-	owner->isDead = true;
-	owner->isPassable = true;
-	owner->img = NULL;
-	return;
-}
-
-void death_Explode(gmThing* owner)//Deals damage to those in the vicinity, both friend and foe.
-{
-	owner->isDead = true;
-	owner->isPassable = true;
-	owner->img = NULL;
-	for (int i = 0; i < currentMap->things.size(); i++)
-	{
-		distance(owner->x, owner->y, currentMap->things[i].x, currentMap->things[i].y) < 3 ? currentMap->things[i].curHp -= 12: NULL;
+		int index = 0;
+		//Find the thing in the owner's inventory.
+		for (int i = 0; i < owner->inventory.size(); i++){ if (*target == owner->inventory[i]){ index = i; } };
+		//Add it to the map and remove it from the inventory.
+		owner->inventory[index]->x = owner->x;
+		owner->inventory[index]->y = owner->y;
+		currentMap->things.insert(currentMap->things.end(), owner->inventory[index]);
+		owner->inventory.erase(owner->inventory.begin() + index);
+		currentMap->things.back()->load();
 	}
 	return;
 }
@@ -156,6 +165,8 @@ void mapMake_Blank(gmMap* owner)//100% walkable ground.
 			owner->map[y][x] = &ground;
 		}
 	}
+	owner->spawnThings();
+	return;
 }
 
 void mapMake_Random(gmMap* owner)//Random, with no refinement.
@@ -167,6 +178,7 @@ void mapMake_Random(gmMap* owner)//Random, with no refinement.
 			roll(1, 'd', 6) == 1 ? owner->map[y][x] = &wall : owner->map[y][x] = &ground;
 		}
 	}
+	owner->spawnThings();
 }
 
 void mapMake_CellularAutomata(gmMap* owner)//Random, with cellular automata-style refinement of edges, etc.
@@ -199,11 +211,91 @@ void mapMake_CellularAutomata(gmMap* owner)//Random, with cellular automata-styl
 			}
 		}
 	}
+	owner->spawnThings();
+	return;
 }
 
-gmMap testMap(100, 100, mapMake_CellularAutomata);
-gmMap testMap2(50, 100, mapMake_Random);
-gmAi kekAi(takeTurn_Random, getTarget_Player);
+gmTile water("res/water.png",false, false);
+gmTile grass("res/grass.png", true, false);
+
+void mapMake_World(gmMap* owner)
+{
+	water.load();
+	grass.load();
+	int adjacent = 0;
+	int iterations = 7;
+	for (int y = 0; y < owner->map.size(); y++)
+	{
+		for (int x = 0; x < owner->map[y].size(); x++)
+		{
+			roll(1, 'd', 100) > 42 ? owner->map[y][x] = &water : owner->map[y][x] = &grass;
+		}
+	}
+	for (int i = 0; i < iterations; i++)
+	{
+		for (int y = 1; y < owner->map.size() - 1; y++)
+		{
+			for (int x = 1; x < owner->map[y].size() - 1; x++)
+			{
+				adjacent = 0;
+				for (int x2 = -1; x2 <= 1; x2++)
+				{
+					for (int y2 = -1; y2 <= 1; y2++)
+					{
+						adjacent += (&water == owner->map[y + y2][x + x2] ? 1 : 0);
+					}
+				}
+				owner->map[y][x] = adjacent >= 6 ? &water : owner->map[y][x];
+				owner->map[y][x] = adjacent <= 4 ? &grass : owner->map[y][x];
+			}
+		}
+	}
+	return;
+}
+void moveThing(gmThing* target, int dx, int dy, gmMap* map = currentMap)
+{
+	std::vector <gmThing*> t;
+	int index = -1;
+	if (getThingByLocation(target->x + dx, target->y + dy) != NULL && getThingByLocation(target->x + dx, target->y + dy)->isPassable == false)
+	{
+		if (target->attack && target != player){ target->attack(target, getThingByLocation(target->x + dx, target->y + dy)); }
+		else if (target->attack && target == player)
+		{
+			t = getThingListByLocation(target->x + dx, target->y + dy);
+			if (t.size() > 1)
+			{
+				sidePanel.heading = "SELECT A TARGET FOR YOUR ATTACK:";
+				sidePanel.options = getNames(t);
+				sidePanel.selectFromList();
+				if (sidePanel.finalSelectionList.back() >= 0)
+				{
+					target->attack(target, t[sidePanel.finalSelectionList.back()]);
+				}
+				sidePanel.reset();
+			}
+			else
+			{
+				target->attack(target, getThingByLocation(target->x + dx, target->y + dy));
+			}
+		}
+	}
+	else if (getCanMove(target->x + dx, target->y + dy))//Uses data from the map to determine whether the tile can be walked onto.
+	{
+		target->step(dx, dy);//Step in the direction.
+		if (target == player)
+		{
+			camX = target->x - SCREEN_WIDTH / 60;
+			camY = target->y - SCREEN_HEIGHT / 60;
+		}
+	}
+	return;
+}
+
+#include "dataThings.h"
+
+gmMap testMap(100, 100, mapMake_CellularAutomata, {&thing_Myconid});
+gmMap testMap2(100, 100, mapMake_Random, { &thing_Bomber });
+gmWorldMap worldMap(100, 100, mapMake_World, { mapMake_Blank, mapMake_CellularAutomata, mapMake_Random }, {});
 
 bool init()	
 {
@@ -220,7 +312,7 @@ bool init()
 	else
 	{
 		//Create window
-		gWindow = SDL_CreateWindow("SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+		gWindow = SDL_CreateWindow("SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN);
 		if (gWindow == NULL)
 		{
 			printf("Window could not be created! SDL Error: %s\n", SDL_GetError());
@@ -242,9 +334,12 @@ bool init()
 				SDL_SetSurfaceBlendMode(screen, SDL_BLENDMODE_BLEND);
 			}
 		}
-		background = load_surface("res/background.png");
+		TTF_Init();
+		messageLog.log.push_back("Welcome.");
+		background = load_surface("res/background-alternate.png");
 		ground.load();
 		wall.load();
+		door.load();
 	}
 
 	fov_settings_init(&fovSettings);
@@ -252,47 +347,16 @@ bool init()
 	fov_settings_set_apply_lighting_function(&fovSettings, applyFov);
 
 	//Set up test environment
+	worldMap.map->make(worldMap.map);
 	testMap.make(&testMap);
 	testMap2.make(&testMap2);
-	currentMap = &testMap;
+	currentMap = worldMap.map;
 
-	currentMap->things.insert(currentMap->things.end(), gmThing("res/test.png"));
-	currentMap->things[0].load();
-	currentMap->things[0].x = currentMap->map[0].size() / 2;
-	currentMap->things[0].y = currentMap->map.size() / 2;	currentMap->things[0].ai = &kekAi;
-	currentMap->things[0].death = death_Normal;
-	currentMap->things[0].attack = attack_Normal;
-	currentMap->things[0].curHp = 12;
-	currentMap->things[0].viewRadius = 4;
 
-	currentMap->things.insert(currentMap->things.end(), gmThing("res/test4.png", false, &kekAi));
-	currentMap->things[1].load();
-	currentMap->things[1].x = currentMap->map[0].size() / 2;
-	currentMap->things[1].y = currentMap->map.size() / 2;
-	currentMap->things[1].death = death_Normal;
-	currentMap->things[1].attack = attack_Normal;
-	currentMap->things[1].curHp = 12;
-	currentMap->things[1].viewRadius = 8;
+	currentMap->things.insert(currentMap->things.begin(), new gmThing(thing_Player));
+	currentMap->things[0]->load();
 
-	currentMap->things.insert(currentMap->things.end(), gmThing("res/test4.png", false, &kekAi));
-	currentMap->things[2].load();
-	currentMap->things[2].x = currentMap->map[0].size() / 2;
-	currentMap->things[2].y = currentMap->map.size() / 2;
-	currentMap->things[2].death = death_Normal;
-	currentMap->things[2].attack = attack_Normal;
-	currentMap->things[2].curHp = 12;
-	currentMap->things[2].viewRadius = 8;
-
-	currentMap->things.insert(currentMap->things.end(), gmThing("res/test4.png", false, &kekAi));
-	currentMap->things[3].load();
-	currentMap->things[3].x = currentMap->map[0].size() / 2;
-	currentMap->things[3].y = currentMap->map.size() / 2;
-	currentMap->things[3].death = death_Normal;
-	currentMap->things[3].attack = attack_Normal;
-	currentMap->things[3].curHp = 12;
-	currentMap->things[3].viewRadius = 8;
-
-	player = &currentMap->things[0];
+	player = currentMap->things[0];
 	camX = player->x - SCREEN_WIDTH / 60;
 	camY = player->y - SCREEN_HEIGHT / 60;
 
@@ -315,13 +379,13 @@ void run()
 	//Whether the player has taken an action or not.
 	bool hasMoved = false;
 	//Main loop flag
-	bool quit = false;
+	gameState = PLAYING;
 
 	//Event handler
 	SDL_Event e;
 
 	//While application is running
-	while (!quit)
+	while (gameState != QUITTING)
 	{
 		//Handle events on queue
 		while (SDL_PollEvent(&e) != 0)
@@ -329,94 +393,214 @@ void run()
 			//User requests quit
 			if (e.type == SDL_QUIT)
 			{
-				quit = true;
+				gameState = QUITTING;
 			}
-			if (e.type == SDL_KEYDOWN)
+			int index = 0;
+			if (gameState == PLAYING)
 			{
-				switch (e.key.keysym.sym)
+				if (e.type == SDL_KEYDOWN)
 				{
-				case SDLK_UP:
-					if (getThingByLocation(player->x, player->y - 1) != NULL && getThingByLocation(player->x, player->y - 1)->isPassable == false)
+					switch (e.key.keysym.sym)
 					{
-						player->attack(player, getThingByLocation(player->x, player->y - 1));
+					case SDLK_KP_7:
+						moveThing(player, -1, -1);
+						hasMoved = true;
+						break;
+					case SDLK_KP_8:
+					case SDLK_UP:
+						moveThing(player, 0, -1);
+						hasMoved = true;//The player has moved.
+						break;
+					case SDLK_KP_9:
+						moveThing(player, 1, -1);
+						hasMoved = true;
+						break;
+					case SDLK_KP_1:
+						moveThing(player, -1, 1);
+						hasMoved = true;
+						break;
+					case SDLK_KP_3:
+						moveThing(player, 1, 1);
+						hasMoved = true;
+						break;
+					case SDLK_KP_2:
+					case SDLK_DOWN:
+						moveThing(player, 0, 1);						
+						hasMoved = true;
+						break;
+					case SDLK_KP_6:
+					case SDLK_RIGHT:
+						moveThing(player, 1, 0);
+						hasMoved = true;
+						break;
+					case SDLK_KP_4:
+					case SDLK_LEFT:
+						moveThing(player, -1, 0);
+						hasMoved = true;
+						break;
+					case SDLK_KP_5:
+					case SDLK_SPACE:
+						hasMoved = true;
+						break;
+					case SDLK_g:
+						if (getThingByLocation(player->x, player->y, currentMap, player))
+						{
+							player->inventory.insert(player->inventory.end(), getThingByLocation(player->x, player->y, currentMap, player));
+							for (int i = 0; i < currentMap->things.size(); i++){ if (currentMap->things[i] == getThingByLocation(player->x, player->y, currentMap, player)){ index = i; break; } }
+							messageLog.log.push_back("Picked up: "+currentMap->things[index]->name);
+							currentMap->things.erase(currentMap->things.begin() + index);
+						}
+						break;
+					case SDLK_d:
+						sidePanel.heading = "SELECT SOMETHING TO DROP:";
+						sidePanel.options = getNames(player->inventory);
+						sidePanel.selectFromList();
+						if (sidePanel.finalSelectionList.back() >= 0)
+						{
+							dropThing(player, &player->inventory[sidePanel.finalSelectionList.back()]);
+						}
+						sidePanel.reset();
+						break;
+					case SDLK_r:
+						sidePanel.heading = "SELECT AN ITEM TO REMOVE:";
+						sidePanel.options = getBodyPartNames(player);
+						sidePanel.selectFromList();
+						if (sidePanel.finalSelectionList.back() >= 0)
+						{
+							equipThing(player, NULL, player->bodyParts[sidePanel.finalSelectionList.back()]);
+						}
+						sidePanel.reset();
+						break;
+					case SDLK_a:
+						if (player->bodyParts.size() > 0 && player->bodyParts[0]->equippedThing && player->bodyParts[0]->equippedThing->use)
+						{
+							player->bodyParts[0]->equippedThing->use(player, player, player->x, player->y, currentMap);
+						}
+						break;
+					case SDLK_u:
+						sidePanel.heading = "SELECT SOMETHING TO USE:";
+						sidePanel.options = getNames(player->inventory);
+						sidePanel.selectFromList();
+						if (sidePanel.finalSelectionList.back() >= 0)
+						{
+							player->inventory[sidePanel.finalSelectionList.back()]->use(player, player, player->x, player->y, currentMap);
+						}
+						sidePanel.reset();
+						break;
+					case SDLK_t:
+						sidePanel.heading = "SELECT SOMETHING TO TOSS:";
+						sidePanel.options = getNames(player->inventory);
+						sidePanel.selectFromList();
+						if (sidePanel.finalSelectionList.back() >= 0)
+						{
+							tossThing(player->inventory[sidePanel.finalSelectionList.back()], player, player->x, player->y, currentMap);
+						}
+						sidePanel.reset();
+						break;
+					case SDLK_i:
+						sidePanel.heading = "INVENTORY:";
+						sidePanel.options = getNames(player->inventory);
+						sidePanel.selectFromList();
+						sidePanel.reset();
+						break;
+					case SDLK_e:
+						sidePanel.heading = "SELECT SOMETHING TO EQUIP:";
+						sidePanel.options = getNames(player->inventory);
+						sidePanel.selectFromList();
+						if (sidePanel.finalSelectionList.back() >= 0)
+						{
+							sidePanel.heading = "SELECT WHICH BODY PART TO EQUIP TO:";
+							sidePanel.options = getBodyPartNames(player);
+							sidePanel.selectFromList();
+							if (sidePanel.finalSelectionList.back() >= 0)
+							{
+								equipThing(
+									player, 
+									player->inventory[sidePanel.finalSelectionList[sidePanel.finalSelectionList.size()-2]],
+									player->bodyParts[sidePanel.finalSelectionList.back()]
+									);
+							}
+						}
+						sidePanel.reset();
+						break;
+					case SDLK_PERIOD:
+						if (SDL_GetKeyboardState(NULL)[SDL_SCANCODE_LSHIFT] || SDL_GetKeyboardState(NULL)[SDL_SCANCODE_RSHIFT])
+						if (currentMap->map[player->y][player->x] == &downStairs)
+						{
+							currentMap = new gmMap(100, 100, mapMake_CellularAutomata, {new gmThing(thing_Imp)});
+							currentMap->make(currentMap);
+						}
+						if (currentMap == worldMap.map)
+						{
+							for (int i = 0; i < worldMap.locales.size(); i++)
+							{
+								if (worldMap.locales[i]->x == player->x && worldMap.locales[i]->y == player->y)
+								{
+									worldMap.locales[i]->mapList[0]->make(worldMap.locales[i]->mapList[0]);
+									currentMap = worldMap.locales[i]->mapList[0];
+									break;
+								}
+							}
+						}
+						break;
+					case SDLK_1:
+						if (DEBUG)
+						{
+							//Switch control.
+							if (currentMap->things.size() > 1){ player = (player == currentMap->things[0]) ? currentMap->things[1] : currentMap->things[0]; }
+							//Set the camera over the player, with the player centred.
+							camX = player->x - SCREEN_WIDTH / 60;
+							camY = player->y - SCREEN_HEIGHT / 60;
+						}
+						break;
+					case SDLK_2:
+						if (DEBUG)
+						{
+							moveMaps(player, currentMap, &testMap2, 0, 0);
+							camX = player->x - SCREEN_WIDTH / 60;
+							camY = player->y - SCREEN_HEIGHT / 60;
+						}
+						break;
+					case SDLK_3:
+						if (DEBUG)
+						{
+							if (currentMap->things.size() >= 1){moveMaps(currentMap->things[currentMap->things.size()-1], currentMap, &testMap2,0, 0);}
+						}
+						break;
+					case SDLK_4:
+						if (DEBUG)
+						{
+							messageLog.log.push_back("The quick brown fox jumped over the lazy dog.");
+						}
+						break;
+					case SDLK_5:
+						if (DEBUG)
+						{
+							currentMap->things.push_back(new gmThing(thing_Imp));
+							currentMap->things.back()->load();
+							currentMap->things.back()->x = player->x;
+							currentMap->things.back()->y = player->y;
+						}
+						break;
+					case SDLK_6:
+						if (DEBUG)
+						{
+							player->curHp += 10000000;
+						}
+						break;
+					case SDLK_7:
+						if (DEBUG)
+						{
+							sidePanel.heading = "THINGLIST:";
+							sidePanel.options = getNames(currentMap->things);
+							sidePanel.selectFromList();
+							sidePanel.reset();
+						}
+						break;
+					case SDLK_ESCAPE:
+						gameState = QUITTING;
+						break;
 					}
-					else if (getCanMove(player->x, player->y-1))//Uses data from the map to determine whether the tile can be walked onto.
-					{
-						player->step(0, -1);//Step in the direction.
-						camX = player->x - SCREEN_WIDTH / 60;
-						camY = player->y - SCREEN_HEIGHT / 60;
-					}
-					hasMoved = true;//The player has moved.
-					break;
-				case SDLK_DOWN:
-					if (getThingByLocation(player->x, player->y + 1) != NULL && getThingByLocation(player->x, player->y + 1)->isPassable == false)
-					{
-						player->attack(player, getThingByLocation(player->x, player->y + 1));
-					}
-					else if (getCanMove(player->x, player->y+1))
-					{
-						player->step(0, 1);
-						camX = player->x - SCREEN_WIDTH / 60;
-						camY = player->y - SCREEN_HEIGHT / 60;
-					}
-					hasMoved = true;
-					break;
-				case SDLK_RIGHT:
-					if (getThingByLocation(player->x+1, player->y) != NULL && getThingByLocation(player->x+1, player->y)->isPassable == false)
-					{
-						player->attack(player, getThingByLocation(player->x+1, player->y));
-					}
-					if (getCanMove(player->x+1, player->y))
-					{
-						player->step(1, 0);
-						camX = player->x - SCREEN_WIDTH / 60;
-						camY = player->y - SCREEN_HEIGHT / 60;
-					}
-					hasMoved = true;
-					break;
-				case SDLK_LEFT:
-					if (getThingByLocation(player->x-1, player->y) != NULL && getThingByLocation(player->x-1, player->y)->isPassable == false)
-					{
-						player->attack(player, getThingByLocation(player->x-1, player->y));
-					}
-					if (getCanMove(player->x-1, player->y))
-					{
-						player->step(-1, 0);
-						camX = player->x - SCREEN_WIDTH / 60;
-						camY = player->y - SCREEN_HEIGHT / 60;
-					}
-					hasMoved = true;
-					break;
-				case SDLK_1:
-					if (DEBUG)
-					{
-						//the player pointer points to the first element of the things array.
-						//hence, the playerthing is always at currentMap->things[0].
-						std::swap(currentMap->things[0], currentMap->things[1]);
-						//player = (player == &currentMap->things[0]) ? &currentMap->things[1] : &currentMap->things[0];
-						//Set the camera over the player, with the player centred.
-						camX = player->x - SCREEN_WIDTH / 60;
-						camY = player->y - SCREEN_HEIGHT / 60;
-					}
-					break;
-				case SDLK_2:
-					if (DEBUG)
-					{
-						moveMaps(player, currentMap, &testMap2, 0, 0);
-						camX = player->x - SCREEN_WIDTH / 60;
-						camY = player->y - SCREEN_HEIGHT / 60;
-					}
-					break;
-				case SDLK_3:
-					if (DEBUG)
-					{
-						moveMaps(&currentMap->things[2], currentMap, &testMap2,0, 0);
-					}
-					break;
-
-				case SDLK_ESCAPE:
-					quit = true;
-					break;
 				}
 			}
 		}
@@ -424,16 +608,24 @@ void run()
 		{
 			for (int i = 0; i < currentMap->things.size(); i++)
 			{
-				if (currentMap->things[i].curHp <= 0 && currentMap->things[i].isDead == false){ currentMap->things[i].death(&currentMap->things[i]); /*currentMap->things.erase(currentMap->things.begin()+i);*/ }
-				if (&currentMap->things[i] != player && currentMap->things[i].isDead == false)
+				//If the thing has died.
+				if (currentMap->things[i]->curHp <= 0 && !currentMap->things[i]->inanimate)
+				{
+					currentMap->things[i]->death(currentMap->things[i]);
+					currentMap->things.erase(currentMap->things.begin() + i);
+					i -= 1;
+					i = i < 0 ? 0 : i;
+				}
+				//For all things other than the player.
+				if (currentMap->things[i] != player)
 				{
 					//If the thing doesn't have a target...
-					if (currentMap->things[i].target == NULL && currentMap->things[i].ai && currentMap->things[i].ai->getTarget)
+					if (currentMap->things[i]->target == NULL && currentMap->things[i]->ai && currentMap->things[i]->ai->getTarget)
 					{
-						currentMap->things[i].ai->getTarget(&currentMap->things[i]);//...get a target.
+						currentMap->things[i]->ai->getTarget(currentMap->things[i]);//...get a target.
 					}
 					//The if statement here determines whether or not the thing has AI at all. If it does...
-					if (currentMap->things[i].ai && currentMap->things[i].ai->takeTurn){ currentMap->things[i].ai->takeTurn(&currentMap->things[i]); }//...each 'thing' takes a turn.
+					if (currentMap->things[i]->ai && currentMap->things[i]->ai->takeTurn){ currentMap->things[i]->ai->takeTurn(currentMap->things[i]); }//...each 'thing' takes a turn.
 				}
 			}
 		}
@@ -442,10 +634,11 @@ void run()
 		for (int x = 0, y = 0; y < currentMap->fovMap.size(); x++)
 		{
 			currentMap->fovMap[y][x] = false;
-			if (x == currentMap->fovMap[y].size()-1){x = 0; y++;}
+			if (x == currentMap->fovMap[y].size()-1){x = -1; y++;}
 		}
 		//Recalculate the new fovMap.
-		doFov(player->x, player->y, player->viewRadius, currentMap);
+		if (currentMap == worldMap.map){ doFov(player->x, player->y, player->viewRadius+3, currentMap); }
+		else{doFov(player->x, player->y, player->viewRadius, currentMap);}
 		//Render the tiles.
 		for (int y = camY < 0 ? 0 : camY; y < (camY + (SCREEN_HEIGHT / 30) > currentMap->map.size() ? currentMap->map.size() : camY + (SCREEN_HEIGHT / 30)); y++)
 		{
@@ -460,17 +653,29 @@ void run()
 				}
 			}
 		}
+		if (currentMap == worldMap.map)
+		{
+			for (int i = 0; i < worldMap.locales.size(); i++)
+			{
+				worldMap.locales[i]->show();
+			}
+		}
 		for (int i = 0; i < currentMap->things.size(); i++)
 		{
-			if (&currentMap->things[i] != player && 
-				currentMap->fovMap[currentMap->things[i].y][currentMap->things[i].x] && 
-				currentMap->things[i].img){ currentMap->things[i].show(); }
+			if (currentMap->things[i] != player && 
+				currentMap->fovMap[currentMap->things[i]->y][currentMap->things[i]->x] && 
+				currentMap->things[i]->img){ currentMap->things[i]->show(); }
 		}
 		player->show();
-		if (player->curHp <= 0 || player->isDead)//If the player has died.
+		if (player->curHp <= 0)//If the player has died.
 		{
-			quit = true;
+			gameState = QUITTING;
 		}
+		std::vector <std::string> itemNames;
+		itemNames = std::vector <std::string>();
+		for (int i = 0; i < player->inventory.size(); i++){ itemNames.insert(itemNames.end(), player->inventory[i]->name); }
+		messageLog.show();
+		sidePanel.show();
 		SDL_UpdateWindowSurface(gWindow);
 		hasMoved = false;
 	}
